@@ -420,6 +420,11 @@ main() {
 
   ip link set "${WIFI_INTERFACE}" up || true
 
+  # Disable power management to prevent connectivity issues
+  if command -v iw >/dev/null 2>&1; then
+    iw "${WIFI_INTERFACE}" set power_save off 2>/dev/null || true
+  fi
+
   if has_ipv4; then
     ensure_dns_resolution
     log "${WIFI_INTERFACE} already has IPv4"
@@ -550,6 +555,12 @@ main() {
   fi
 
   run ip link set "${WIFI_INTERFACE}" up || true
+
+  # Disable power management to prevent connectivity issues
+  if command -v iw >/dev/null 2>&1; then
+    run iw "${WIFI_INTERFACE}" set power_save off 2>/dev/null || true
+  fi
+
   if nmcli_running && nmcli_has_wifi_interface; then
     connect_with_nmcli
   else
