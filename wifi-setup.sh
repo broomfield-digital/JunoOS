@@ -511,11 +511,45 @@ TimeoutStartSec=120
 WantedBy=multi-user.target
 EOF
 
+  # WILC workaround: delayed fixup service that re-runs wifi-setup after boot
+  local fixup_service="/etc/systemd/system/discordia-wifi-fixup.service"
+  local fixup_timer="/etc/systemd/system/discordia-wifi-fixup.timer"
+
+  write_root_file "${fixup_service}" 0644 <<EOF
+[Unit]
+Description=WILC Wi-Fi fixup (Discordia)
+After=discordia-wifi-ensure.service
+
+[Service]
+Type=oneshot
+Environment=WIFI_SSID="${WIFI_SSID}"
+Environment=WIFI_PASSWORD="${WIFI_PASSWORD}"
+Environment=WIFI_INTERFACE="${WIFI_INTERFACE}"
+ExecStart=/root/DiscordiaOS/wifi-setup.sh -B
+EOF
+
+  write_root_file "${fixup_timer}" 0644 <<'EOF'
+[Unit]
+Description=WILC Wi-Fi fixup timer (Discordia)
+
+[Timer]
+OnBootSec=30s
+Unit=discordia-wifi-fixup.service
+
+[Install]
+WantedBy=timers.target
+EOF
+
   if run systemctl daemon-reload >/dev/null 2>&1; then
     if run systemctl enable discordia-wifi-ensure.service >/dev/null 2>&1; then
       log "enabled boot-time Wi-Fi service: discordia-wifi-ensure.service"
     else
       warn "failed to enable discordia-wifi-ensure.service; enable manually if needed"
+    fi
+    if run systemctl enable discordia-wifi-fixup.timer >/dev/null 2>&1; then
+      log "enabled Wi-Fi fixup timer: discordia-wifi-fixup.timer (30s after boot)"
+    else
+      warn "failed to enable discordia-wifi-fixup.timer; enable manually if needed"
     fi
   else
     warn "systemctl daemon-reload failed; skipping service enable"
