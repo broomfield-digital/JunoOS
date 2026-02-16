@@ -511,21 +511,50 @@ TimeoutStartSec=120
 WantedBy=multi-user.target
 EOF
 
-  # WILC workaround: delayed fixup service that re-runs wifi-setup after boot
+  # WILC workaround: delayed fixup service that reconnects after boot
   local fixup_service="/etc/systemd/system/discordia-wifi-fixup.service"
   local fixup_timer="/etc/systemd/system/discordia-wifi-fixup.timer"
+  local fixup_script="/usr/local/sbin/discordia-wifi-fixup.sh"
 
-  write_root_file "${fixup_service}" 0644 <<EOF
+  write_root_file "${fixup_script}" 0755 <<EOF
+#!/usr/bin/env bash
+# WILC WiFi fixup - reconnect and disable power save
+IFACE="${WIFI_INTERFACE}"
+log() { printf '[discordia-wifi-fixup] %s\n' "\$*"; }
+
+# Check if we have connectivity
+if ping -c 1 -W 2 10.0.0.1 >/dev/null 2>&1; then
+  log "connectivity OK, just disabling power_save"
+  iw "\${IFACE}" set power_save off 2>/dev/null || true
+  exit 0
+fi
+
+log "no connectivity, reconnecting"
+wpa_cli -i "\${IFACE}" reassociate >/dev/null 2>&1 || true
+sleep 5
+iw "\${IFACE}" set power_save off 2>/dev/null || true
+
+if ! ping -c 1 -W 2 10.0.0.1 >/dev/null 2>&1; then
+  log "still no connectivity, full reconnect"
+  pkill -f "wpa_supplicant.*\${IFACE}" 2>/dev/null || true
+  rm -f "/run/wpa_supplicant/\${IFACE}" 2>/dev/null || true
+  sleep 1
+  wpa_supplicant -B -i "\${IFACE}" -c "/etc/wpa_supplicant/wpa_supplicant-\${IFACE}.conf" || true
+  sleep 3
+  dhclient -v "\${IFACE}" 2>/dev/null || udhcpc -i "\${IFACE}" -q -n 2>/dev/null || true
+  iw "\${IFACE}" set power_save off 2>/dev/null || true
+fi
+log "done"
+EOF
+
+  write_root_file "${fixup_service}" 0644 <<'EOF'
 [Unit]
 Description=WILC Wi-Fi fixup (Discordia)
 After=discordia-wifi-ensure.service
 
 [Service]
 Type=oneshot
-Environment=WIFI_SSID="${WIFI_SSID}"
-Environment=WIFI_PASSWORD="${WIFI_PASSWORD}"
-Environment=WIFI_INTERFACE="${WIFI_INTERFACE}"
-ExecStart=/root/DiscordiaOS/wifi-setup.sh -B
+ExecStart=/usr/local/sbin/discordia-wifi-fixup.sh
 EOF
 
   write_root_file "${fixup_timer}" 0644 <<'EOF'
