@@ -431,30 +431,35 @@ main() {
 
   ip link set "${WIFI_INTERFACE}" up || true
 
-  # Disable power management to prevent connectivity issues
-  if command -v iw >/dev/null 2>&1; then
-    iw "${WIFI_INTERFACE}" set power_save off 2>/dev/null || true
-  fi
+  disable_power_save() {
+    if command -v iw >/dev/null 2>&1; then
+      iw "${WIFI_INTERFACE}" set power_save off 2>/dev/null || true
+    fi
+  }
 
   if has_ipv4; then
+    disable_power_save
     ensure_dns_resolution
     log "${WIFI_INTERFACE} already has IPv4"
     exit 0
   fi
 
   try_nmcli && wait_for_ipv4 20 && {
+    disable_power_save
     ensure_dns_resolution
     log "connected via NetworkManager"
     exit 0
   }
 
   try_ifup && wait_for_ipv4 20 && {
+    disable_power_save
     ensure_dns_resolution
     log "connected via ifupdown"
     exit 0
   }
 
   try_wpa_supplicant && wait_for_ipv4 25 && {
+    disable_power_save
     ensure_dns_resolution
     log "connected via direct wpa_supplicant/DHCP"
     exit 0
@@ -574,11 +579,6 @@ main() {
 
   run ip link set "${WIFI_INTERFACE}" up || true
 
-  # Disable power management to prevent connectivity issues
-  if command -v iw >/dev/null 2>&1; then
-    run iw "${WIFI_INTERFACE}" set power_save off 2>/dev/null || true
-  fi
-
   if nmcli_running && nmcli_has_wifi_interface; then
     connect_with_nmcli
   else
@@ -586,6 +586,12 @@ main() {
       warn "NetworkManager is running but ${WIFI_INTERFACE} is not managed as Wi-Fi; using wpa_supplicant fallback"
     fi
     connect_with_wpa_supplicant
+  fi
+
+  # Disable power management after connection (driver re-enables during connect)
+  if command -v iw >/dev/null 2>&1; then
+    run iw "${WIFI_INTERFACE}" set power_save off 2>/dev/null || true
+    log "disabled WiFi power management"
   fi
 
   ensure_dns_resolution
