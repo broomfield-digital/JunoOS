@@ -408,6 +408,8 @@ try_wpa_supplicant() {
   fi
 
   pkill -f "wpa_supplicant.*${WIFI_INTERFACE}" >/dev/null 2>&1 || true
+  rm -f "/run/wpa_supplicant/${WIFI_INTERFACE}" 2>/dev/null || true
+  sleep 1
   wpa_supplicant -B -i "${WIFI_INTERFACE}" -c "${wpa_conf}" || true
 
   if command -v dhclient >/dev/null 2>&1; then
@@ -415,6 +417,10 @@ try_wpa_supplicant() {
   elif command -v udhcpc >/dev/null 2>&1; then
     udhcpc -i "${WIFI_INTERFACE}" -q -n || true
   fi
+
+  # WILC driver workaround: reassociate after DHCP to fix unicast traffic
+  sleep 2
+  wpa_cli -i "${WIFI_INTERFACE}" reassociate >/dev/null 2>&1 || true
 }
 
 main() {
