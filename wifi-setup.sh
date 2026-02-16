@@ -182,6 +182,11 @@ EOF
     warn "ifup/ifdown not found; starting wpa_supplicant and requesting DHCP directly"
   fi
 
+  # Kill any existing wpa_supplicant for this interface
+  run pkill -f "wpa_supplicant.*${WIFI_INTERFACE}" 2>/dev/null || true
+  run rm -f "/run/wpa_supplicant/${WIFI_INTERFACE}" 2>/dev/null || true
+  sleep 1
+
   run ip link set "${WIFI_INTERFACE}" up || true
   run wpa_supplicant -B -i "${WIFI_INTERFACE}" -c "${wpa_conf}"
   if command -v dhclient >/dev/null 2>&1; then
