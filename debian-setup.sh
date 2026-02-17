@@ -77,6 +77,11 @@ write_root_file /etc/apt/apt.conf.d/99archive-no-valid-until <<'EOF'
 Acquire::Check-Valid-Until "false";
 EOF
 
+log "Forcing APT to use IPv4"
+write_root_file /etc/apt/apt.conf.d/99force-ipv4 <<'EOF'
+Acquire::ForceIPv4 "true";
+EOF
+
 log "Clearing stale APT index files"
 run rm -rf /var/lib/apt/lists/*
 
