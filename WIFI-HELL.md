@@ -96,7 +96,7 @@ This establishes a WiFi connection that works *for a while*. Expect:
 
 *"Fixed in the slime they say, 'We were sullen in the sweet air.'"*
 
-Git objects are written to disk in a sequence: first the data, then the index. When the WILC driver freezes mid-transfer — and it will — `git pull` dies partway through writing a packfile or loose object. The result is a `.git/objects` directory containing empty or truncated files. Git's error message is characteristically unhelpful:
+Git objects are written to disk in a sequence: first the data, then the index. When the network drops mid-transfer — and on this board, it will — `git pull` dies partway through writing a packfile or loose object. The result is a `.git/objects` directory containing empty or truncated files. Git's error message is characteristically unhelpful:
 
 ```
 error: object file .git/objects/fc/f65a1f0a10b56cec5f5d35dbd5eb9363c845b0 is empty
@@ -111,21 +111,23 @@ rm -rf ~/DiscordiaOS
 git clone https://github.com/broomfield-digital/DiscordiaOS.git ~/DiscordiaOS
 ```
 
-The cruelty is architectural. Git assumes the transport layer delivers complete data or fails cleanly. The WILC driver does neither — it delivers *partial* data and reports success, because the TCP connection didn't technically close. Git trusts the bytes it received. The bytes are lies.
+The cruelty is architectural. Git assumes the transport layer delivers complete data or fails cleanly. Neither the WILC driver nor the OptConnect cellular link meets this assumption. The WILC delivers partial data and reports success because the TCP connection didn't technically close. The cellular link — supposedly the reliable option — drops packets during handoff, congestion, or simply because the signal faded for a moment. Both paths produce the same empty object files. There is no escape.
 
-If you must use git over WILC, consider shallow clones to minimize transfer size:
+Git trusts the bytes it received. The bytes are lies. It doesn't matter which link told them.
+
+Shallow clones reduce exposure by minimizing transfer size:
 
 ```bash
 git clone --depth 1 https://github.com/broomfield-digital/DiscordiaOS.git ~/DiscordiaOS
 ```
 
-Better yet, use ethernet.
+When corruption strikes, don't bother with `git fsck --full` or heroic recovery attempts. Just nuke and re-clone. Accept the cycle.
 
 ---
 
 ## Recommendations
 
-1. **Use ethernet when possible** - The OptConnect cellular gateway on eth0 is rock solid by comparison.
+1. **Use ethernet when possible** - The OptConnect cellular gateway on eth0 is less unreliable than WILC. This is a low bar. It clears it.
 
 2. **Consider a USB WiFi dongle** - See below for recommended adapters.
 
