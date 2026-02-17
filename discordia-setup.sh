@@ -251,6 +251,18 @@ disable_timers() {
 	done
 }
 
+blacklist_wilc() {
+	local conf="/etc/modprobe.d/no-wilc.conf"
+	write_if_changed "$conf" <<'EOF'
+# Prevent WILC SPI driver from auto-loading at boot.
+# The driver is unstable (see WIFI-HELL.md) and wifi-setup.sh
+# will modprobe it on demand when WiFi is explicitly requested.
+blacklist wilc-spi
+blacklist wilc_spi
+EOF
+	log "WILC driver blacklisted (load on demand via wifi-setup.sh)"
+}
+
 remove_fstab_mountpoint() {
 	local mountpoint="$1"
 	local tmp
@@ -477,6 +489,7 @@ main() {
 	fi
 	ensure_journald_volatile
 	disable_timers
+	blacklist_wilc
 	configure_fstab
 	ensure_data_layout
 
