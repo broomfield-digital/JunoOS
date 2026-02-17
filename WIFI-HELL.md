@@ -1,12 +1,51 @@
-# WiFi on the TS-7800-v2: A Cautionary Tale
+# WiFi on the TS-7800-v2: A Descent Through the Circles
+
+*"Abandon all throughput, ye who enter here."*
+
+Dante Alighieri mapped nine circles of Hell, each worse than the last, each a punishment exquisitely fitted to the sin. The WILC3000 WiFi module on the TS-7800-v2 offers a similar taxonomy. We have descended through several circles. We document them here as a warning to those who follow.
 
 ## The Hardware
 
-The TS-7800-v2 includes a **Microchip WILC3000** WiFi/BT module connected via SPI. In theory, this provides 802.11 b/g/n connectivity. In practice, it provides frustration.
+The TS-7800-v2 includes a **Microchip WILC3000** WiFi/BT module connected via SPI. In theory, this provides 802.11 b/g/n connectivity. In practice, it provides a structured curriculum in suffering.
 
-## The Horror
+---
 
-The WILC SPI driver (`wilc-spi`) exhibits deeply unsettling behavior:
+## First Circle: Limbo (The Boot Spam)
+
+*"Here sighs, lamentations and loud wailings resounded through the starless air."*
+
+Before you even attempt WiFi, the WILC driver punishes you for its mere existence. On a stock Debian image, the kernel auto-loads `wilc_spi` via device tree binding at every boot, vomiting initialization messages across the serial console:
+
+```
+[   17.020082] BT initialize timeout
+[   17.130082] Device already up. request source is Wifi
+[   17.135155] WILC_SPI spi0.3 wlan0: INFO [wilc_init_host_int]Host[ede28000][ede29500]
+[   17.150087] WILC_SPI spi0.3 wlan0: INFO [wilc_mac_open]*** re-init ***
+[   17.174878] WILC_SPI spi0.3 wlan0: INFO [init_chip]Bootrom sts = c
+[   17.234066] wilc_handle_isr,>> UNKNOWN_INTERRUPT - 0x00000000
+```
+
+This wall of text arrives precisely as the login prompt appears, clobbering whatever you're trying to type. You enter your username. Half of it lands in the login field; the other half is swallowed by kernel messages scrolling past. You type your password blind, hoping the interrupt storm has subsided. It hasn't. Login fails. You try again. More WILC messages. The module isn't even being *used* — it's just announcing its existence, loudly, to no one.
+
+The standard `blacklist` directive in `/etc/modprobe.d/` does not help. The device tree binding bypasses modprobe's alias matching. Only the `install` override is strong enough:
+
+```bash
+# /etc/modprobe.d/no-wilc.conf
+install wilc-spi /bin/true
+install wilc_spi /bin/true
+```
+
+This tells modprobe to run `/bin/true` (a no-op) instead of loading the driver, regardless of what triggers the load. `discordia-setup.sh` writes this automatically. When WiFi is actually wanted, `wifi-setup.sh` uses `modprobe --ignore-install` to bypass the override.
+
+Dante placed virtuous pagans in Limbo — souls guilty of no sin except being born in the wrong place. The WILC module commits no sin except existing in the device tree. Its punishment is to be silenced at boot, forever calling out to an audience that has stopped listening.
+
+---
+
+## Second Circle: The Unicast Tempest
+
+*"The hellish storm, which never rests, sweeps the spirits along with its rapine."*
+
+You have silenced the boot spam. You have typed your credentials at the login prompt unmolested. You have summoned the courage to actually use WiFi. The WILC SPI driver (`wilc-spi`) rewards your optimism with deeply unsettling behavior:
 
 1. **Association succeeds** - The module happily associates with your AP, completes WPA2 handshake, and obtains a DHCP lease via broadcast. Everything looks perfect in `wpa_cli status`.
 
@@ -20,16 +59,24 @@ The WILC SPI driver (`wilc-spi`) exhibits deeply unsettling behavior:
 
 6. **Boot is hopeless** - Attempts to make this work automatically at boot (systemd services, timers, delayed fixups, reconnect cycles) all failed. The driver seems allergic to systemd.
 
-## What We Tried
+## Third Circle: The Futile Rites
+
+*"In the third circle I arrive, of rain eternal, cursed, cold, and heavy."*
+
+We tried everything. Each attempt worked once, then never again, like prayers answered only to prove they were heard and denied:
 
 - Disabling power management before connection
 - Disabling power management after connection
 - Reassociating after DHCP
 - Full reconnect cycles at boot
 - Delayed fixup timers 30 seconds after boot
-- Praying
+- Praying (see above)
 
-## What "Works"
+---
+
+## Fourth Circle: The Sisyphean Connection
+
+*"Here I saw people, more than elsewhere, on both sides, howling, rolling weights by force of chest."*
 
 After boot, connect to the board via **serial console** and run:
 
@@ -115,7 +162,7 @@ iwconfig      # Should show the new interface
 
 Then configure with wpa_supplicant as usual, substituting the USB interface name for `wlan0`.
 
-## Boot Services (Disabled)
+## Boot Services (Disabled — Escaped from the Sixth Circle)
 
 The following services exist but are disabled because they don't work reliably:
 
@@ -125,7 +172,9 @@ systemctl disable discordia-wifi-ensure.service
 systemctl disable discordia-wifi-fixup.timer
 ```
 
-## Root Cause Analysis
+## Fifth Circle: Root Cause Analysis
+
+*"Fixed in the slime they say, 'We were sullen in the sweet air.'"*
 
 **Is the driver flaky because it can't handle modern routers?**
 
@@ -152,9 +201,11 @@ More likely culprits:
 
 ## The Verdict
 
+*"Through me you enter into the city of woes. Through me you enter into eternal pain. Through me you enter among the lost."*
+
 The WILC3000 driver is not ready for production use. The hardware may be fine; the Linux driver is not. This module should be treated as decorative until Microchip improves driver quality.
 
-We remain disturbed.
+Dante eventually climbed out of Hell and saw the stars again. We use ethernet.
 
 ---
 
