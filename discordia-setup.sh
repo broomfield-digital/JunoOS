@@ -153,7 +153,16 @@ is_key_present_for_user() {
 	grep -Eq '^[[:space:]]*[^#[:space:]]' "$auth_file"
 }
 
+ensure_apt_ipv4() {
+	local conf="/etc/apt/apt.conf.d/99force-ipv4"
+	write_if_changed "$conf" <<'EOF'
+Acquire::ForceIPv4 "true";
+EOF
+	log "APT forced to IPv4"
+}
+
 ensure_pkg_install() {
+	ensure_apt_ipv4
 	export DEBIAN_FRONTEND=noninteractive
 	apt-get update
 	apt-get install -y \
