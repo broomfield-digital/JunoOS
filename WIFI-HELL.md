@@ -88,46 +88,13 @@ This establishes a WiFi connection that works *for a while*. Expect:
 - ~15-25ms latency when working
 - Occasional 50% packet loss
 - Random freezes requiring reconnection
-- Git operations to corrupt repos mid-transfer (see next circle)
-
----
-
-## Fifth Circle: The Wrathful Repository
-
-*"Fixed in the slime they say, 'We were sullen in the sweet air.'"*
-
-Git objects are written to disk in a sequence: first the data, then the index. When the network drops mid-transfer — and on this board, it will — `git pull` dies partway through writing a packfile or loose object. The result is a `.git/objects` directory containing empty or truncated files. Git's error message is characteristically unhelpful:
-
-```
-error: object file .git/objects/fc/f65a1f0a10b56cec5f5d35dbd5eb9363c845b0 is empty
-fatal: loose object fcf65a1f0a10b56cec5f5d35dbd5eb9363c845b0 (stored in
-  .git/objects/fc/f65a1f0a10b56cec5f5d35dbd5eb9363c845b0) is corrupt
-```
-
-This is not recoverable. `git fsck` will confirm the corruption; it will not fix it. `git reflog` references objects that no longer exist. The repository is dead. This happens every session. Not sometimes. Every time. You will become intimately familiar with:
-
-```bash
-rm -rf ~/DiscordiaOS
-git clone https://github.com/broomfield-digital/DiscordiaOS.git ~/DiscordiaOS
-```
-
-The cruelty is architectural. Git assumes the transport layer delivers complete data or fails cleanly. Neither the WILC driver nor the OptConnect cellular link meets this assumption. The WILC delivers partial data and reports success because the TCP connection didn't technically close. The cellular link — supposedly the reliable option — drops packets during handoff, congestion, or simply because the signal faded for a moment. Both paths produce the same empty object files. There is no escape.
-
-Git trusts the bytes it received. The bytes are lies. It doesn't matter which link told them.
-
-Shallow clones reduce exposure by minimizing transfer size:
-
-```bash
-git clone --depth 1 https://github.com/broomfield-digital/DiscordiaOS.git ~/DiscordiaOS
-```
-
-When corruption strikes, don't bother with `git fsck --full` or heroic recovery attempts. Just nuke and re-clone. Accept the cycle.
+- Git operations to corrupt repos mid-transfer (see `OS-HELL.md`, First Circle)
 
 ---
 
 ## Recommendations
 
-1. **Use ethernet when possible** - The OptConnect cellular gateway on eth0 is less unreliable than WILC. This is a low bar. It clears it.
+1. **Use ethernet when possible** - The OptConnect cellular gateway on eth0 is reliable. The WILC is not.
 
 2. **Consider a USB WiFi dongle** - See below for recommended adapters.
 
@@ -197,7 +164,7 @@ iwconfig      # Should show the new interface
 
 Then configure with wpa_supplicant as usual, substituting the USB interface name for `wlan0`.
 
-## Boot Services (Disabled — Escaped from the Seventh Circle)
+## Boot Services (Disabled — Escaped from the Sixth Circle)
 
 The following services exist but are disabled because they don't work reliably:
 
@@ -207,7 +174,7 @@ systemctl disable discordia-wifi-ensure.service
 systemctl disable discordia-wifi-fixup.timer
 ```
 
-## Sixth Circle: Root Cause Analysis
+## Fifth Circle: Root Cause Analysis
 
 *"Within these tombs are heretics, with all their followers."*
 
