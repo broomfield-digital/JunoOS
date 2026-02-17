@@ -10,7 +10,7 @@ The WILC3000 WiFi module has its own hell (see `WIFI-HELL.md`). But the operatin
 
 *"Fixed in the slime they say, 'We were sullen in the sweet air.'"*
 
-Git objects are written to disk in a sequence: first the data, then the index. On this board, `git pull` routinely dies partway through writing a packfile or loose object. The result is a `.git/objects` directory containing empty or truncated files:
+Every session, `git pull` leaves behind empty object files. The repository is dead on arrival:
 
 ```
 error: object file .git/objects/fc/f65a1f0a10b56cec5f5d35dbd5eb9363c845b0 is empty
@@ -18,21 +18,43 @@ fatal: loose object fcf65a1f0a10b56cec5f5d35dbd5eb9363c845b0 (stored in
   .git/objects/fc/f65a1f0a10b56cec5f5d35dbd5eb9363c845b0) is corrupt
 ```
 
-This is not recoverable. `git fsck` will confirm the corruption; it will not fix it. `git reflog` references objects that no longer exist. The repository is dead. This happens every session. Not sometimes. Every time.
+Not recoverable. `git fsck` confirms the damage; it does not repair it. Nuke and re-clone. Every time.
 
-The network is not at fault. The OptConnect cellular link has been reliable for years on other hardware. The corruption happens over ethernet — the same link that serves SSH sessions without issue. Something between the kernel's TCP stack, the filesystem, and git's object-writing path is silently truncating data. Loose objects arrive as zero-byte files. Packfiles end mid-stream. The kernel reports no errors. The filesystem reports no errors. Git discovers the damage only when it tries to read what it thought it wrote.
+### The Root Cause
 
-Likely culprits:
+We found it. The rootfs is ext4 on a 3.59 GiB eMMC (`mmcblk0p1`). The setup scripts were mounting it with `commit=60` — telling ext4 to defer metadata sync for up to **60 seconds**. Meanwhile, Debian Stretch ships git 2.11 (2016), which does not fsync object writes. Modern git (2.36+) added `core.fsync` to force data to disk; git 2.11 trusts the kernel to flush when it's ready.
 
-1. **Filesystem write ordering** — The rootfs runs on NAND flash. Write barriers, sync behavior, and the flash translation layer may conspire to report writes as complete before data reaches stable storage. A poorly-timed flush (or lack of one) leaves empty object files.
+The sequence of destruction:
 
-2. **Memory pressure** — With 1GB of RAM, git's packfile operations can push the system into swap or OOM territory. If the kernel kills a git subprocess mid-write, the partially-written object persists as a corrupt file.
+1. `git pull` receives objects and writes them to `.git/objects/`
+2. Git creates each file and writes compressed object data
+3. The kernel accepts the write into its page cache — the data exists only in RAM
+4. Git exits, satisfied. The data has not reached the eMMC.
+5. Up to 60 seconds may pass before ext4 flushes to disk
+6. Anything that interrupts the flush — a reboot, a power glitch, a kernel hiccup from a WILC driver firing `UNKNOWN_INTERRUPT` — kills the buffered data
+7. On next boot, ext4 journal recovery preserves the **inodes** (the files exist) but the **data blocks** were never written (the files are empty)
 
-3. **Ancient git** — Debian Stretch ships git 2.11 (2016). Modern git has substantially improved its atomic write paths and fsync behavior. The version on this board predates those fixes.
+The `dmesg` on every boot confirmed the damage:
 
-4. **ARMv5 kernel bugs** — The TS-7800-v2 runs a vendor-patched kernel. Vendor kernels on embedded ARM boards are where filesystem bugs go to retire, undiscovered and unfixed.
+```
+EXT4-fs (mmcblk0p1): recovery complete
+```
 
-You will become intimately familiar with:
+Journal recovery. Every boot. The filesystem was never cleanly unmounted because writes were always in flight, lazily deferred by a 60-second commit window.
+
+### The Fix
+
+Drop `commit=60` from the rootfs mount options. The ext4 default is `commit=5`, which is fine for eMMC — the wear concern that motivated the longer interval was misplaced. eMMC has its own wear-leveling controller; it is not raw NAND. Five-second commit intervals do not meaningfully reduce eMMC lifespan. Sixty-second commit intervals destroy git repositories.
+
+`discordia-setup.sh` no longer sets `commit=60`. To apply immediately without rebooting:
+
+```bash
+mount -o remount,commit=5 /
+```
+
+### Until the Fix is Verified
+
+You will remain intimately familiar with:
 
 ```bash
 rm -rf ~/DiscordiaOS
@@ -45,7 +67,7 @@ Shallow clones reduce exposure by minimizing transfer size:
 git clone --depth 1 https://github.com/broomfield-digital/DiscordiaOS.git ~/DiscordiaOS
 ```
 
-When corruption strikes, don't bother with heroic recovery. Just nuke and re-clone. Accept the cycle. Dante's sinners push their boulders uphill for eternity. You will push your repos.
+Dante's sinners push their boulders uphill for eternity. We push our repos. Perhaps now, the boulder stays.
 
 ---
 
