@@ -22,6 +22,7 @@ CODEX_WORKDIR="${CODEX_WORKDIR:-/root/DiscordiaOS}"
 CODEX_SANDBOX="${CODEX_SANDBOX:-danger-full-access}"
 CODEX_APPROVAL="${CODEX_APPROVAL:-never}"
 CODEX_COLOR="${CODEX_COLOR:-never}"
+CODEX_LOGDIR="${CODEX_LOGDIR:-/mnt/logs}"
 
 usage() {
   cat <<'EOF'
@@ -36,6 +37,7 @@ Options:
   -p FILE   Protocol file for pilot mode. The file contents are
             prepended to the prompt as the operating protocol.
             The prompt becomes the objective.
+  -l DIR    Log directory for pilot mode action log (default: /mnt/logs).
   -C DIR    Override working directory (default: /root/DiscordiaOS).
   -h        Show this help.
 
@@ -45,15 +47,17 @@ Environment overrides:
   CODEX_SANDBOX   (default: danger-full-access)
   CODEX_APPROVAL  (default: never)
   CODEX_COLOR     (default: never)
+  CODEX_LOGDIR    (default: /mnt/logs)
 EOF
 }
 
 prompt_file=""
 protocol_file=""
-while getopts ":f:p:C:h" opt; do
+while getopts ":f:p:l:C:h" opt; do
   case "${opt}" in
     f) prompt_file="${OPTARG}" ;;
     p) protocol_file="${OPTARG}" ;;
+    l) CODEX_LOGDIR="${OPTARG}" ;;
     C) CODEX_WORKDIR="${OPTARG}" ;;
     h)
       usage
@@ -111,6 +115,7 @@ if [ -n "${protocol_file}" ]; then
     echo "Protocol file is empty: ${protocol_file}" >&2
     exit 1
   fi
+  PILOT_LOGFILE="${CODEX_LOGDIR}/pilot-$(date -u +%Y%m%dT%H%M%SZ).log"
   PROMPT="You are operating under the following protocol.
 Read it completely before taking any action.
 
@@ -119,6 +124,16 @@ ${PROTOCOL_BODY}
 --- END PROTOCOL ---
 
 Objective: ${PROMPT}
+
+Action log: Write a timestamped action log to ${PILOT_LOGFILE}.
+Create the directory if it does not exist. Log each action as a single
+line in the format: YYYY-MM-DDTHH:MM:SSZ ACTION description
+Write the first entry when you begin and the last entry with the outcome
+(COMPLETE or FAILED). Example entries:
+  2026-02-16T17:30:00Z START objective accepted
+  2026-02-16T17:30:05Z CHECK directory exists
+  2026-02-16T17:30:10Z CREATE identity.txt
+  2026-02-16T17:31:00Z COMPLETE all checks passed
 
 Execute according to the protocol. Stop and report if you encounter
 an unrecoverable error or if the objective is complete."
