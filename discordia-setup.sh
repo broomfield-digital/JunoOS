@@ -373,6 +373,60 @@ ensure_fstab_opts() {
 	rm -f "$tmp"
 }
 
+remove_fstab_opt() {
+	local mountpoint="$1"
+	local remove="$2"
+	local tmp
+	local rc=0
+
+	tmp="$(mktemp)"
+	if awk -v mp="$mountpoint" -v rem="$remove" '
+		function strip_opt(opts, rem,    n, a, i, result) {
+			n = split(opts, a, ",")
+			result = ""
+			for (i = 1; i <= n; i++) {
+				if (a[i] != rem) {
+					result = (result == "" ? a[i] : result "," a[i])
+				}
+			}
+			return (result == "" ? "defaults" : result)
+		}
+		BEGIN { found = 0; changed = 0 }
+		{
+			if ($0 ~ /^[[:space:]]*#/ || NF < 4) {
+				print
+				next
+			}
+			if ($2 == mp) {
+				found = 1
+				newopts = strip_opt($4, rem)
+				if (newopts != $4) {
+					$4 = newopts
+					changed = 1
+				}
+			}
+			print
+		}
+		END {
+			if (!found) exit 2
+			if (changed) exit 10
+			exit 0
+		}
+	' /etc/fstab >"$tmp"; then
+		:
+	else
+		rc=$?
+		case "$rc" in
+			2)  ;;
+			10)
+				cat "$tmp" >/etc/fstab
+				log "removed fstab opt $remove from $mountpoint"
+				;;
+		esac
+	fi
+	rm -f "$tmp"
+}
+
 strip_managed_fstab_block() {
 	local tmp
 
@@ -441,6 +495,7 @@ log_external_mount_status() {
 configure_fstab() {
 	[ -f /etc/fstab ] || die "/etc/fstab not found"
 
+	remove_fstab_opt "/" "commit=60"
 	ensure_fstab_opts "/" "noatime,nodiratime"
 	ensure_fstab_opts "/boot" "noatime,nodiratime"
 
