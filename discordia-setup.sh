@@ -441,7 +441,7 @@ log_external_mount_status() {
 configure_fstab() {
 	[ -f /etc/fstab ] || die "/etc/fstab not found"
 
-	ensure_fstab_opts "/" "noatime,nodiratime,commit=60"
+	ensure_fstab_opts "/" "noatime,nodiratime"
 	ensure_fstab_opts "/boot" "noatime,nodiratime"
 
 	remove_fstab_swaps
