@@ -88,7 +88,40 @@ This establishes a WiFi connection that works *for a while*. Expect:
 - ~15-25ms latency when working
 - Occasional 50% packet loss
 - Random freezes requiring reconnection
-- Git operations to corrupt repos mid-transfer
+- Git operations to corrupt repos mid-transfer (see next circle)
+
+---
+
+## Fifth Circle: The Wrathful Repository
+
+*"Fixed in the slime they say, 'We were sullen in the sweet air.'"*
+
+Git objects are written to disk in a sequence: first the data, then the index. When the WILC driver freezes mid-transfer — and it will — `git pull` dies partway through writing a packfile or loose object. The result is a `.git/objects` directory containing empty or truncated files. Git's error message is characteristically unhelpful:
+
+```
+error: object file .git/objects/fc/f65a1f0a10b56cec5f5d35dbd5eb9363c845b0 is empty
+fatal: loose object fcf65a1f0a10b56cec5f5d35dbd5eb9363c845b0 (stored in
+  .git/objects/fc/f65a1f0a10b56cec5f5d35dbd5eb9363c845b0) is corrupt
+```
+
+This is not recoverable. `git fsck` will confirm the corruption; it will not fix it. `git reflog` references objects that no longer exist. The repository is dead. This happens every session. Not sometimes. Every time. You will become intimately familiar with:
+
+```bash
+rm -rf ~/DiscordiaOS
+git clone https://github.com/broomfield-digital/DiscordiaOS.git ~/DiscordiaOS
+```
+
+The cruelty is architectural. Git assumes the transport layer delivers complete data or fails cleanly. The WILC driver does neither — it delivers *partial* data and reports success, because the TCP connection didn't technically close. Git trusts the bytes it received. The bytes are lies.
+
+If you must use git over WILC, consider shallow clones to minimize transfer size:
+
+```bash
+git clone --depth 1 https://github.com/broomfield-digital/DiscordiaOS.git ~/DiscordiaOS
+```
+
+Better yet, use ethernet.
+
+---
 
 ## Recommendations
 
@@ -162,7 +195,7 @@ iwconfig      # Should show the new interface
 
 Then configure with wpa_supplicant as usual, substituting the USB interface name for `wlan0`.
 
-## Boot Services (Disabled — Escaped from the Sixth Circle)
+## Boot Services (Disabled — Escaped from the Seventh Circle)
 
 The following services exist but are disabled because they don't work reliably:
 
@@ -172,9 +205,9 @@ systemctl disable discordia-wifi-ensure.service
 systemctl disable discordia-wifi-fixup.timer
 ```
 
-## Fifth Circle: Root Cause Analysis
+## Sixth Circle: Root Cause Analysis
 
-*"Fixed in the slime they say, 'We were sullen in the sweet air.'"*
+*"Within these tombs are heretics, with all their followers."*
 
 **Is the driver flaky because it can't handle modern routers?**
 
