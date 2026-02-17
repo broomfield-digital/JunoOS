@@ -81,7 +81,7 @@ We tried everything. Each attempt worked once, then never again, like prayers an
 After boot, connect to the board via **serial console** and run:
 
 ```bash
-~/DiscordiaOS/wifi-setup.sh Marmot WhiteFox
+~/DiscordiaOS/wifi-setup.sh <name> <password>
 ```
 
 This establishes a WiFi connection that works *for a while*. Expect:
@@ -229,7 +229,7 @@ Dante eventually climbed out of Hell and saw the stars again. We use ethernet.
 
 **SPI (Serial Peripheral Interface)** - A hardware bus for connecting chips on a circuit board. The WILC3000 WiFi module connects to the CPU via SPI rather than USB or PCIe. SPI is simple but the drivers are often less mature.
 
-**SSID (Service Set Identifier)** - The name of a WiFi network (like "Marmot"). What you see when scanning for networks.
+**SSID (Service Set Identifier)** - The name of a WiFi network. What you see when scanning for networks.
 
 **wpa_supplicant** - The Linux daemon that handles WiFi authentication and connection. It negotiates with the AP, handles WPA2 encryption, and maintains the connection. Configured via `/etc/wpa_supplicant/wpa_supplicant-*.conf`.
 
