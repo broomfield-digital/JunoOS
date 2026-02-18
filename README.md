@@ -25,11 +25,52 @@ This single command will:
 
 After bootstrap completes, look up the VPN-routable IP on the OptConnect Summit portal and connect via SSH.
 
+## Manual eth0 Setup (Serial Console)
+
+If eth0 is down or the board has lost its network config, use `eth0-setup.sh` from the serial console:
+
+```bash
+bash eth0-setup.sh
+```
+
+This brings up eth0 with the static OptConnect config (`192.168.1.11/24` via `192.168.1.90`), writes DNS, persists the config for reboot, and verifies connectivity.
+
+If the repo isn't on the board yet, run the commands manually:
+
+```bash
+ip link set eth0 up                        # bring up the interface
+ip addr add 192.168.1.11/24 dev eth0       # assign static IP
+ip route add default via 192.168.1.90      # set gateway
+echo "nameserver 8.8.8.8" > /etc/resolv.conf  # set DNS
+ping -c 2 192.168.1.90                     # test gateway
+ping -c 2 8.8.8.8                          # test internet
+```
+
+### Troubleshooting
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| `eth0` state is `DOWN` or `NO-CARRIER` | Cable disconnected or bad cable | Check cable, try the correct LAN port on the OptConnect |
+| Can't ping `192.168.1.90` | Layer 2 issue — no link to OptConnect | Verify cable, check OptConnect LAN port, power-cycle OptConnect |
+| Can ping `192.168.1.90` but not `8.8.8.8` | OptConnect not routing to internet | Check cellular status on Summit portal, power-cycle OptConnect |
+| Can ping `8.8.8.8` but DNS fails | Missing `/etc/resolv.conf` | `echo "nameserver 8.8.8.8" > /etc/resolv.conf` |
+| SSH connection refused from laptop | Board has no internet, or sshd not running | Fix eth0 first, then `systemctl status sshd` |
+| `Network is unreachable` to VPN IP | Board isn't online through OptConnect yet | Fix eth0 + internet first, VPN IP only works once OptConnect is routing |
+
+### Setting a root password (for SSH access)
+
+```bash
+echo 'root:root' | chpasswd
+```
+
+Change to a real password once you have remote access.
+
 ## Scripts
 
 | Script | Purpose |
 |--------|---------|
 | `bootstrap.sh` | One-command setup orchestrator (the curl target) |
+| `eth0-setup.sh` | Standalone eth0 + OptConnect setup for serial console |
 | `debian-setup.sh` | Fixes Debian Stretch APT repos to use `archive.debian.org` |
 | `discordia-setup.sh` | Full system setup: packages, users, fstab, journald, timers, data directories |
 | `ssh-setup.sh` | Enables and configures sshd |
