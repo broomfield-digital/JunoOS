@@ -118,69 +118,18 @@ clone_or_update_repo() {
 	fi
 }
 
-configure_static_eth0() {
-	local cfg="/etc/network/interfaces.d/${ETH_IFACE}.cfg"
-	local addr="${ETH_ADDRESS%/*}"
-	local prefix="${ETH_ADDRESS#*/}"
-	local netmask
+ensure_path_root_bin() {
+	local profile="/root/.profile"
+	local line='export PATH="/root/bin:$PATH"'
 
-	case "$prefix" in
-		24) netmask="255.255.255.0" ;;
-		16) netmask="255.255.0.0" ;;
-		8)  netmask="255.0.0.0" ;;
-		*)  netmask="255.255.255.0"; warn "unknown prefix /$prefix; defaulting to /24" ;;
-	esac
-
-	# Ensure interfaces.d is sourced.
-	if [ -f /etc/network/interfaces ]; then
-		if ! grep -Eq '^[[:space:]]*source-directory[[:space:]]+/etc/network/interfaces\.d' /etc/network/interfaces &&
-		   ! grep -Eq '^[[:space:]]*source[[:space:]]+/etc/network/interfaces\.d/\*' /etc/network/interfaces; then
-			printf '\nsource-directory /etc/network/interfaces.d\n' >>/etc/network/interfaces
-			log "added interfaces.d include to /etc/network/interfaces"
-		fi
-	else
-		cat >/etc/network/interfaces <<'EOF'
-# Managed by bootstrap.sh
-source-directory /etc/network/interfaces.d
-EOF
+	if [ -f "$profile" ] && grep -qF '/root/bin' "$profile"; then
+		log "/root/bin already in $profile"
+		return
 	fi
 
-	mkdir -p /etc/network/interfaces.d
-
-	cat >"$cfg" <<EOF
-auto ${ETH_IFACE}
-iface ${ETH_IFACE} inet static
-    address ${addr}
-    netmask ${netmask}
-    gateway ${ETH_GATEWAY}
-    dns-nameservers ${ETH_DNS}
-EOF
-	log "wrote static config: $cfg ($addr/$prefix via $ETH_GATEWAY)"
-
-	# Write a persistent /etc/resolv.conf.  The dns-nameservers directive
-	# in ifupdown config only takes effect when the resolvconf package is
-	# installed, which we don't require.
-	if [ -L /etc/resolv.conf ]; then
-		rm -f /etc/resolv.conf
-	fi
-	local dns
-	{
-		printf '# Managed by bootstrap.sh\n'
-		for dns in $ETH_DNS; do
-			printf 'nameserver %s\n' "$dns"
-		done
-	} >/etc/resolv.conf
-	log "wrote /etc/resolv.conf: $ETH_DNS"
-
-	# Kill any DHCP client from the temporary lease before switching to static.
-	pkill -f "dhclient.*${ETH_IFACE}" >/dev/null 2>&1 || true
-	pkill -f "udhcpc.*${ETH_IFACE}" >/dev/null 2>&1 || true
-
-	# Apply the static configuration.
-	ifdown "$ETH_IFACE" >/dev/null 2>&1 || true
-	ifup "$ETH_IFACE" >/dev/null 2>&1 || warn "ifup $ETH_IFACE failed; config will apply on next boot"
-
-	log "$ETH_IFACE configured: $(ip -4 -o addr show dev "$ETH_IFACE" | awk '{print $4}' | head -n1)"
+	printf '\n# Added by bootstrap.sh\n%s\n' "$line" >>"$profile"
+	log "added /root/bin to PATH in $profile"
+	export PATH="/root/bin:$PATH"
 }
 
 main() {
@@ -201,11 +150,16 @@ main() {
 	log "running discordia-setup.sh"
 	bash "$DISCORDIA_DIR/discordia-setup.sh"
 
-	# Phase 4: permanent static eth0 for OptConnect
-	log "configuring static eth0 for OptConnect"
-	configure_static_eth0
+	# Phase 4: /root/bin on PATH
+	ensure_path_root_bin
 
-	# Phase 5: enable SSH
+	# Phase 5: permanent static eth0 for OptConnect
+	log "running eth0-setup.sh"
+	ETH_IFACE="$ETH_IFACE" ETH_ADDRESS="$ETH_ADDRESS" \
+		ETH_GATEWAY="$ETH_GATEWAY" ETH_DNS="$ETH_DNS" \
+		bash "$DISCORDIA_DIR/eth0-setup.sh"
+
+	# Phase 6: enable SSH
 	log "running ssh-setup.sh"
 	bash "$DISCORDIA_DIR/ssh-setup.sh"
 
